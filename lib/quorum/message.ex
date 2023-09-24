@@ -1,9 +1,9 @@
 defmodule Quorum.Message do
-  @enforce_keys [:poll_id, :data]
-  defstruct [:poll_id, :data]
+  @enforce_keys [:type, :data]
+  defstruct [:type, :data]
 
   @type t :: %__MODULE__{
-          poll_id: String.t(),
+          type: atom(),
           data: map()
         }
 end
