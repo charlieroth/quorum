@@ -15,7 +15,7 @@ defmodule Quorum.Application do
         ]
       },
       {Quorum.PollSupervisor, []},
-      {Quorum.Topology, dcs: ["MI", "IN", "OH", "IL"], vc_dc_map: %{}},
+      {Quorum.Topology, dcs: ["MI", "IN", "OH", "IL"]},
       {Quorum.Mailroom, []}
     ]
 

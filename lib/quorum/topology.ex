@@ -43,15 +43,8 @@ defmodule Quorum.Topology do
   @impl true
   def init(args) do
     dcs = Keyword.fetch!(args, :dcs)
-    vc_dc_map = Keyword.fetch!(args, :vc_dc_map)
     dc_map = Enum.into(dcs, %{}, fn dc -> {dc, HashRing.new()} end)
-
-    state = %{
-      dcs: dcs,
-      dc_map: dc_map,
-      vc_dc_map: vc_dc_map
-    }
-
+    state = %{dcs: dcs, dc_map: dc_map}
     {:ok, state}
   end
 
@@ -90,8 +83,11 @@ defmodule Quorum.Topology do
   end
 
   @impl true
-  def handle_call({:get_actor_server, _id, _vc}, _from, state) do
-    # TODO
-    {:reply, state, state}
+  def handle_call({:get_actor_server, id, voting_center}, _from, state) do
+    dc = Quorum.extract_data_center(voting_center)
+    dc_hash_ring = Map.get(state.dc_map, dc)
+    actor_server = dc_hash_ring |> HashRing.key_to_node({id, voting_center})
+
+    {:reply, actor_server, state}
   end
 end
