@@ -20,10 +20,12 @@ defmodule Quorum.Mailroom do
   @impl true
   def init(_args) do
     :ok = :net_kernel.monitor_nodes(true)
-    {node_name, data_center} = Node.self() |> Quorum.parse_node()
+    node = Node.self()
+    node_name = node |> Quorum.to_quorum_node_name()
+    [data_center, _, _] = node_name |> Quorum.split_quorum_node_name()
 
     state = %{
-      node: Node.self(),
+      node: node,
       node_name: node_name,
       data_center: data_center
     }
@@ -53,19 +55,29 @@ defmodule Quorum.Mailroom do
   end
 
   @impl true
-  def handle_call(%Quorum.Message{type: :create_poll, data: _data} = message, _from, state) do
-    node =
-      message.data
-      |> Quorum.Topology.get_actor_server()
-      |> Quorum.to_node()
+  def handle_call(%Quorum.Message{type: :create_poll, data: data} = message, _from, state) do
+    nodes_in_other_availability_zone = state.node |> Quorum.nodes_in_other_availability_zone()
 
-    if state.node == node do
-      result = Quorum.PollSupervisor.call(message)
-      {:reply, result, state}
+    # Can only create primary poll if there are nodes in other availability zone
+    if not Enum.empty?(nodes_in_other_availability_zone) do
+      # 1. Create poll in current node
+      {:ok, poll_pid} = Quorum.PollSupervisor.call(message)
+      # 2. Create same poll in same data center, different availability zone
+      node = Enum.random(nodes_in_other_availability_zone)
+
+      {:ok, poll_in_other_az_pid} =
+        GenServer.call({Quorum.Mailroom, node}, %Quorum.Message{type: :replicate_poll, data: data})
+
+      {:reply, [poll_pid, poll_in_other_az_pid], state}
     else
-      result = GenServer.call({Quorum.Mailroom, node}, message)
-      {:reply, result, state}
+      {:reply, {:error, :replication_failed, "No nodes in other availability zone"}, state}
     end
+  end
+
+  @impl true
+  def handle_call(%Quorum.Message{type: :replicate_poll, data: data} = _message, _from, state) do
+    {:ok, poll_pid} = Quorum.PollSupervisor.call(%Quorum.Message{type: :create_poll, data: data})
+    {:reply, {:ok, poll_pid}, state}
   end
 
   @impl true

@@ -55,12 +55,14 @@ defmodule Quorum.Topology do
 
   @impl true
   def handle_call({:sync, nodes}, _from, state) do
-    node_name_list = [Node.self() | nodes] |> Enum.map(&Quorum.parse_node/1)
     new_dc_map = Enum.into(state.dcs, %{}, fn dc -> {dc, HashRing.new()} end)
 
     new_dc_map =
-      Enum.reduce(node_name_list, new_dc_map, fn {node_name, data_center}, acc ->
-        Map.update!(acc, data_center, fn hr -> HashRing.add_node(hr, node_name) end)
+      [Node.self() | nodes]
+      |> Enum.map(&Quorum.to_quorum_node_name/1)
+      |> Enum.reduce(new_dc_map, fn quorum_node_name, acc ->
+        [dc, _, _] = quorum_node_name |> Quorum.split_quorum_node_name()
+        Map.update!(acc, dc, &HashRing.add_node(&1, quorum_node_name))
       end)
 
     state = %{state | dc_map: new_dc_map}
@@ -83,10 +85,10 @@ defmodule Quorum.Topology do
   end
 
   @impl true
-  def handle_call({:get_actor_server, id, voting_center}, _from, state) do
-    dc = Quorum.extract_data_center(voting_center)
+  def handle_call({:get_actor_server, id, vc}, _from, state) do
+    [dc, _, _] = vc |> Quorum.split_vc()
     dc_hash_ring = Map.get(state.dc_map, dc)
-    actor_server = dc_hash_ring |> HashRing.key_to_node({id, voting_center})
+    actor_server = dc_hash_ring |> HashRing.key_to_node({id, vc})
 
     {:reply, actor_server, state}
   end

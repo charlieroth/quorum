@@ -4,6 +4,11 @@ defmodule Quorum.Poll do
   @enforce_keys [:key, :projections, :log]
   defstruct [:key, :projections, :log]
 
+  @spec get_key(pid :: pid()) :: map()
+  def get_key(pid) do
+    GenServer.call(pid, {:get_key})
+  end
+
   def start_link(%Quorum.Message{type: :create_poll, data: data} = message) do
     GenServer.start_link(__MODULE__, message, name: Quorum.via(data.id))
   end
@@ -29,6 +34,11 @@ defmodule Quorum.Poll do
   @impl true
   def handle_call(%Quorum.Message{type: :log}, _from, state) do
     {:reply, state.log, state}
+  end
+
+  @impl true
+  def handle_call({:get_key}, _from, state) do
+    {:reply, state.key, state}
   end
 
   @impl true
