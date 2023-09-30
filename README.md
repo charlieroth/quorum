@@ -7,6 +7,16 @@ for government elections.
 `Quorum` is built with Elixir on the BEAM; designed for scalability,
 fault-tolerance and distribution.
 
+The architecture of the `Quorum` system is heavily influenced by the
+[Waterpark Project](https://www.youtube.com/watch?v=pQ0CvjAJXz4). The
+Waterpark Project is an incredibly inspiring implementation of a
+distributed system that serviced hospitals and people all over the
+United States in what is likely the biggest stress test on the
+United States medical infrastructure has ever faced. This was all
+done with Elixir and zero down-time, proving that distributed systems
+can and should be built to service some of the most critical
+information exchange systems for a large group of people.
+
 ## Motivations and Philosophy
 
 It is my long held belief that the software system used for elections
