@@ -1,9 +1,9 @@
 defmodule Quorum.Topology do
   use GenServer
 
-  @type actor_server_lookup :: %{
+  @type actor_server_key :: %{
           id: String.t(),
-          voting_center: String.t()
+          vc: String.t()
         }
 
   @spec state() :: map()
@@ -31,9 +31,9 @@ defmodule Quorum.Topology do
     GenServer.call(__MODULE__, :get_current)
   end
 
-  @spec get_actor_server(query :: actor_server_lookup()) :: String.t()
-  def get_actor_server(%{id: id, voting_center: voting_center}) do
-    GenServer.call(__MODULE__, {:get_actor_server, id, voting_center})
+  @spec get_actor_server(key :: actor_server_key()) :: atom()
+  def get_actor_server(%{id: id, vc: vc}) do
+    GenServer.call(__MODULE__, {:get_actor_server, id, vc})
   end
 
   def start_link(args) do
@@ -88,8 +88,9 @@ defmodule Quorum.Topology do
   def handle_call({:get_actor_server, id, vc}, _from, state) do
     [dc, _, _] = vc |> Quorum.split_vc()
     dc_hash_ring = Map.get(state.dc_map, dc)
-    actor_server = dc_hash_ring |> HashRing.key_to_node({id, vc})
+    dc_hash_ring_node = dc_hash_ring |> HashRing.key_to_node({id, vc})
+    erlang_node_name = dc_hash_ring_node |> Quorum.to_erlang_node_name()
 
-    {:reply, actor_server, state}
+    {:reply, erlang_node_name, state}
   end
 end

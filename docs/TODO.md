@@ -52,23 +52,29 @@ must be available and service messages for a Poll to be "in consensus".
 The following scenarios will be implemented in order so that the implementation
 can be carefully interated upon and verified.
 
-#### Single Poll Replica
+#### 1 Poll Replica
 
 - Poll creation, no replication
 
-#### 2 Poll Replicas
+```bash
+$ iex --sname mi_a_1@localhost --cookie "quorum" -S mix
+
+iex(mi_a_1@localhost)1>
+
+$ iex --sname in_a_1@localhost --cookie "quorum" -S mix
+
+iex(in_a_1@localhost)1>
+
+$ iex --sname oh_a_1@localhost --cookie "quorum" -S mix
+
+iex(oh_a_1@localhost)1>
+
+$ iex --sname il_a_1@localhost --cookie "quorum" -S mix
+
+iex(il_a_1@localhost)1>
+```
+
+#### 4 Poll Replicas
 
 - Poll creation
-- Replication in same DC, different AZ
-
-#### 3 Poll Replicas
-
-- Poll creation
-- Replication in same DC, different AZ
-- Replication in different DC
-
-#### 4/5 Poll Replicas
-
-- Poll creation
-- Replication in same DC, different AZ
 - Replication in 3 different DCs

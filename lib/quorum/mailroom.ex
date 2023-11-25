@@ -1,6 +1,10 @@
 defmodule Quorum.Mailroom do
   use GenServer
 
+  require Logger
+
+  alias Quorum.Topology
+
   def send(%Quorum.Message{type: :create_poll} = message) do
     GenServer.call(Quorum.Mailroom, message)
   end
@@ -56,33 +60,63 @@ defmodule Quorum.Mailroom do
 
   @impl true
   def handle_call(%Quorum.Message{type: :create_poll, data: data} = message, _from, state) do
-    nodes_in_other_availability_zone = state.node |> Quorum.nodes_in_other_availability_zone()
+    nodes = Quorum.Topology.get_current() |> Quorum.get_replication_nodes(data.key)
 
-    # Can only create primary poll if there are nodes in other availability zone
-    if not Enum.empty?(nodes_in_other_availability_zone) do
-      # 1. Create poll in current node
-      {:ok, poll_pid} = Quorum.PollSupervisor.call(message)
-      # 2. Create same poll in same data center, different availability zone
-      node = Enum.random(nodes_in_other_availability_zone)
-
-      {:ok, poll_in_other_az_pid} =
-        GenServer.call({Quorum.Mailroom, node}, %Quorum.Message{type: :replicate_poll, data: data})
-
-      {:reply, [poll_pid, poll_in_other_az_pid], state}
+    with true <- length(nodes) < 3,
+         :ok <- Quorum.PollSupervisor.call(message) |> did_create_poll?(),
+         :ok <- nodes |> replicate_poll(data) |> did_replicate_poll?() do
+      local_actor_server = data.key |> Topology.get_actor_server()
+      {:reply, {:ok, :replication_succeeded, [local_actor_server | nodes]}, state}
     else
-      {:reply, {:error, :replication_failed, "No nodes in other availability zone"}, state}
+      false ->
+        {:reply, {:error, :replication_failed, "Not enough nodes to replicate to"}, state}
+
+      {:error, reason} ->
+        # TODO: Tear down "orphaned" Poll processes
+        # if contains_failures do
+        #   successful_replications = Enum.filter(replication_results, fn {:ok, _} -> true end)
+        #   Enum.each(successful_replications, fn {:ok, poll_pid} ->
+        #     key = GenServer.call(poll_pid, {:get_key})
+        #     Quorum.PollSupervisor.call(%Quorum.Message{type: :remove_poll, data: %{key: key}})
+        #   end)
+        # else
+        #   {:reply, {:ok, replication_results}, state}
+        # end
+        Logger.error("Failed to replicate poll: #{inspect(reason)}")
+        {:reply, {:error, :replication_failed, reason}, state}
     end
   end
 
   @impl true
   def handle_call(%Quorum.Message{type: :replicate_poll, data: data} = _message, _from, state) do
-    {:ok, poll_pid} = Quorum.PollSupervisor.call(%Quorum.Message{type: :create_poll, data: data})
-    {:reply, {:ok, poll_pid}, state}
+    creation_result = Quorum.PollSupervisor.call(%Quorum.Message{type: :create_poll, data: data})
+    {:reply, creation_result, state}
   end
 
   @impl true
   def handle_call(message, _from, state) do
     IO.puts("unsupported message: #{inspect(message)}")
     {:reply, message, state}
+  end
+
+  defp replicate_poll(nodes, data) do
+    Enum.map(nodes, fn node ->
+      GenServer.call({Quorum.Mailroom, node}, %Quorum.Message{type: :replicate_poll, data: data})
+    end)
+  end
+
+  defp did_create_poll?({:ok, _poll_pid}), do: :ok
+  defp did_create_poll?({:error, _}), do: {:error, :creation_failed}
+  defp did_create_poll?(_), do: {:error, :creation_failed}
+
+  defp did_replicate_poll?(replication_results) do
+    if Enum.any?(replication_results, fn
+         {:error, _} -> true
+         {:ok, _} -> false
+       end) do
+      {:error, :replication_failed}
+    else
+      :ok
+    end
   end
 end

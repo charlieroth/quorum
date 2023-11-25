@@ -10,17 +10,15 @@ defmodule Quorum.Poll do
   end
 
   def start_link(%Quorum.Message{type: :create_poll, data: data} = message) do
-    GenServer.start_link(__MODULE__, message, name: Quorum.via(data.id))
+    IO.inspect(data, label: "poll server received data")
+    GenServer.start_link(__MODULE__, message, name: Quorum.via(data.key.id))
   end
 
   @impl true
   def init(%Quorum.Message{type: :create_poll, data: data} = message) do
     {:ok,
      %Quorum.Poll{
-       key: %{
-         id: data.id,
-         voting_center: data.voting_center
-       },
+       key: data.key,
        projections: %{},
        log: [message]
      }}

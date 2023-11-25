@@ -4,15 +4,47 @@ defmodule Quorum do
   def create_poll(vc, question \\ "", options \\ []) do
     Quorum.Mailroom.send(%Quorum.Message{
       type: :create_poll,
-      data: %{id: random_id(), voting_center: vc, question: question, options: options}
+      data: %{
+        key: %{id: random_id(), vc: vc},
+        question: question,
+        options: options
+      }
     })
   end
 
-  def random_id(length \\ 12) do
-    :crypto.strong_rand_bytes(length) |> Base.url_encode64(padding: false)
+  @spec random_id(len :: integer()) :: String.t()
+  def random_id(len \\ 12) do
+    :crypto.strong_rand_bytes(len) |> Base.url_encode64(padding: false)
   end
 
-  def via(id), do: {:via, Registry, {Quorum.Registry, id}}
+  def via(id) do
+    IO.inspect(id, label: "via received id")
+    {:via, Registry, {Quorum.Registry, id}}
+  end
+
+  @doc """
+  Returns a list of node where the Poll will be or are replicated at
+  that are not in the same data center as the primary replica.
+  """
+  @spec get_replication_nodes(topology :: map(), key :: %{id: String.t(), vc: String.t()}) :: [
+          atom()
+        ]
+  def get_replication_nodes(topology, %{id: id, vc: vc} = _key) do
+    [primary_dc, _, _] = Quorum.split_vc(vc)
+
+    topology
+    |> Enum.filter(fn {dc, _dc_hr} -> dc != primary_dc end)
+    |> Enum.map(fn {_dc, dc_hr} ->
+      case HashRing.key_to_node(dc_hr, {id, vc}) do
+        {:error, {:invalid_ring, :no_nodes}} ->
+          nil
+
+        node ->
+          node |> Quorum.to_erlang_node_name()
+      end
+    end)
+    |> Enum.filter(&(&1 != nil))
+  end
 
   def split_vc(vc) when is_binary(vc) do
     vc |> String.split("-")

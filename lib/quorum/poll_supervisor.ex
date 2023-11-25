@@ -1,12 +1,12 @@
 defmodule Quorum.PollSupervisor do
   use DynamicSupervisor
 
-  def call(%Quorum.Message{type: :create_poll, data: _data} = message) do
+  def call(%Quorum.Message{type: :create_poll} = message) do
     child_spec = {Quorum.Poll, message}
     DynamicSupervisor.start_child(__MODULE__, child_spec)
   end
 
-  def call(%Quorum.Message{type: :remove_poll, data: %{id: id}}) do
+  def call(%Quorum.Message{type: :remove_poll, data: %{key: %{id: id}}}) do
     DynamicSupervisor.terminate_child(__MODULE__, id)
   end
 
